@@ -52,6 +52,7 @@ public class Main {
                 try (FileOutputStream fos = new FileOutputStream(filePath)) {
                     DeflaterOutputStream dos = new DeflaterOutputStream(fos); {
                         dos.write(fullContent);
+                        dos.finish();
                     }
                 }
                 System.out.println(sha1);
