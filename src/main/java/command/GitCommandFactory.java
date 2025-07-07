@@ -18,7 +18,7 @@ public class GitCommandFactory {
         COMMANDS.put("ls-tree", new LsTreeCommand());
         COMMANDS.put("write-tree", new WriteTreeCommand());
         COMMANDS.put("commit-tree", new CommitTreeCommand());
-        // COMMANDS.put("clone", new CloneCommand()); // JGit dependency required
+        COMMANDS.put("clone", new CloneCommand());
     }
     
     /**
