@@ -2,12 +2,15 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.zip.DataFormatException;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.Inflater;
@@ -20,53 +23,87 @@ public class Main {
         }
 
         final String command = args[0];
-
-        switch (command) {
-            case "init" -> initGitRepository();
-            case "cat-file" -> catFile(args);
-            case "hash-object" -> hashObject(args);
-            case "ls-tree" -> lsTree(args);
-            case "write-tree" -> writeTree(args);
-            default -> System.out.println("Unknown command: " + command);
+        if (Objects.equals(command, "init")) {
+            initGitRepository();
+        } else if (Objects.equals(command, "cat-file")) {
+            catFile(args);
+        } else if (Objects.equals(command, "hash-object")) {
+            hashObject(args);
+        } else if (Objects.equals(command, "ls-tree")) {
+            lsTree(args);
+        } else if (Objects.equals(command, "write-tree")) {
+            String treeSha = writeTree(new File("."));
+            System.out.println(treeSha  );
+        } else {
+            System.out.println("알 수 없는 명령어: " + command);
         }
     }
 
-    private static void writeTree(String[] args) {
-        if (args.length < 3) {
-            System.out.println("write-tree 명령어에는 충분한 인수가 필요합니다.");
-            return;
-        }
+    private static String writeTree(File dir) {
+        File[] files = dir.listFiles((d,name) -> !name.equals(".git"));
+        if (files == null) return null;
 
-        String hash = args[2];
-        final String folderName = hash.substring(0, 2);
-        final String fileName = hash.substring(2);
-
-        File objectFile = new File(".git/objects/" + folderName + "/" + fileName);
-        if (!objectFile.exists()) {
-            System.out.println("객체 파일이 존재하지 않습니다: " + objectFile.getPath());
-            return;
-        }
+        Arrays.sort(files, (f1, f2) -> f1.getName().compareTo(f2.getName()));
+        ByteArrayOutputStream treeContent = new ByteArrayOutputStream();
 
         try {
-            byte[] compressed = Files.readAllBytes(objectFile.toPath());
-            Inflater inflater = new Inflater();
-            inflater.setInput(compressed);
+            for (File file : files) {
+                String mode, sha, name = file.getName();
 
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            byte[] buffer = new byte[8192];
-            while (!inflater.finished()) {
-                int count = inflater.inflate(buffer);
-                outputStream.write(buffer, 0, count);
+                if (file.isDirectory()) {
+                    mode = "40000";
+                    sha = writeTree(file); // Recursive!
+                } else {
+                    byte[] content = Files.readAllBytes(file.toPath());
+                    String header = "blob " + content.length + "\0";
+                    byte[] blob = concatenate(header.getBytes(StandardCharsets.UTF_8), content);
+                    sha = computeSHA1(blob);
+
+                    String dirName = ".git/objects/" + sha.substring(0, 2);
+                    String fileName = sha.substring(2);
+                    File objectFile = new File(dirName + "/" + fileName);
+                    if (!objectFile.exists()) {
+                        new File(dirName).mkdirs();
+                        try (FileOutputStream fos = new FileOutputStream(objectFile);
+                             DeflaterOutputStream dos = new DeflaterOutputStream(fos)) {
+                            dos.write(blob);
+                        }
+                    }
+                    mode = "100644";
+                }
+
+                treeContent.write((mode + " " + name).getBytes(StandardCharsets.UTF_8));
+                treeContent.write(0);
+                treeContent.write(hexToBytes(sha));
             }
-            inflater.end();
-
-            String content = outputStream.toString("UTF-8");
-            System.out.println(content);
         } catch (IOException e) {
-            throw new RuntimeException("객체 파일 읽기 실패: " + objectFile.getPath(), e);
-        } catch (DataFormatException e) {
-            throw new RuntimeException("압축 해제 실패: " + objectFile.getPath(), e);
+            throw new RuntimeException("객체 파일 쓰기 실패", e);
         }
+
+        byte[] raw = treeContent.toByteArray();
+        String treeHeader = "tree " + raw.length + "\0";
+        byte[] fullTree = concatenate(treeHeader.getBytes(StandardCharsets.UTF_8), raw);
+        String treeSha = computeSHA1(fullTree);
+
+        String treeDir = ".git/objects/" + treeSha.substring(0, 2);
+        String treeFile = treeSha.substring(2);
+        new File(treeDir).mkdirs();
+        try (FileOutputStream fos = new FileOutputStream(treeDir + "/" + treeFile);
+             DeflaterOutputStream dos = new DeflaterOutputStream(fos)) {
+            dos.write(fullTree);
+        } catch (IOException e) {
+            throw new RuntimeException("트리 객체 파일 쓰기 실패", e);
+        }
+
+        return treeSha;
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        byte[] bytes = new byte[hex.length() / 2];
+        for (int i = 0; i < hex.length(); i += 2) {
+            bytes[i / 2] = (byte) Integer.parseInt(hex.substring(i, i + 2), 16);
+        }
+        return bytes;
     }
 
     private static void lsTree(String[] args) {
