@@ -15,6 +15,15 @@
         <java.version>23</java.version>
     </properties>
 
+    <dependencies>
+        <dependency>
+            <groupId>org.eclipse.jgit</groupId>
+            <artifactId>org.eclipse.jgit</artifactId>
+            <version>6.7.0.202309050840-r</version>
+        </dependency>
+    </dependencies>
+
+
     <build>
         <plugins>
             <plugin>
