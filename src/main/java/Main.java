@@ -75,7 +75,6 @@ public class Main {
             for (byte b : digest) {
                 sb.append(String.format("%02x", b));
             }
-            System.out.println(sb.toString());
             return sb.toString();
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-1 알고리즘을 찾을 수 없습니다.", e);
