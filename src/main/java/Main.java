@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.DataFormatException;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.Inflater;
@@ -23,7 +25,53 @@ public class Main {
             case "init" -> initGitRepository();
             case "cat-file" -> catFile(args);
             case "hash-object" -> hashObject(args);
+            case "ls-tree" -> lsTree(args);
             default -> System.out.println("Unknown command: " + command);
+        }
+    }
+
+    private static void lsTree(String[] args) {
+        String hash = args[2];
+        final String folderName = hash.substring(0, 2);
+        final String fileName = hash.substring(2);
+
+        File objectFile = new File(".git/objects/" + folderName + "/" + fileName);
+
+        try {
+            byte[] compressed = Files.readAllBytes(objectFile.toPath());
+            Inflater inflater = new Inflater();
+
+            inflater.setInput(compressed);
+
+            byte[] buffer = new byte[8192];
+            StringBuilder sb = new StringBuilder();
+            while (!inflater.finished()) {
+                int count = inflater.inflate(buffer);
+                sb.append(new String(buffer, 0, count));
+            }
+
+            inflater.end();
+
+            int firstNullIndex = sb.indexOf("\0");
+            int offset = firstNullIndex + 1;
+            List<String> files = new ArrayList<>();
+
+            while (sb.indexOf("\0", offset) != -1) {
+                int nullIndex = sb.indexOf("\0", offset);
+                int spaceIndex = sb.indexOf(" ", offset);
+
+                String name = sb.substring(spaceIndex+1, nullIndex);
+                files.add(name);
+                offset = nullIndex + 1;
+            }
+
+            for (String file : files) {
+                System.out.println(file);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("객체 파일 읽기 실패: " + objectFile.getPath(), e);
+        } catch (DataFormatException e) {
+            throw new RuntimeException("압축 해제 실패: " + objectFile.getPath(), e);
         }
     }
 
