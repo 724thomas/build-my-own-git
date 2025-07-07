@@ -18,8 +18,51 @@ public class Main {
         switch (command) {
             case "init" -> initGitRepository();
             case "cat-file" -> catFile(args);
+            case "hash-object" -> hashObject(args);
             default -> System.out.println("Unknown command: " + command);
         }
+    }
+
+    private static void hashObject(String[] args) {
+        if (args.length < 2) {
+            System.out.println("hash-object 명령어에는 충분한 인수가 필요합니다.");
+            return;
+        }
+
+        final String filePath = args[1];
+        try {
+            byte[] content = Files.readAllBytes(Paths.get(filePath));
+            String objectHash = hashContent(content);
+            System.out.println("객체 해시: " + objectHash);
+        } catch (IOException e) {
+            throw new RuntimeException("파일 읽기 실패: " + filePath, e);
+        }
+    }
+
+    private static String hashContent(byte[] content) {
+        // Git 객체 해시 계산 로직
+        String header = "blob " + content.length + "\0";
+        byte[] headerBytes = header.getBytes();
+        byte[] combined = new byte[headerBytes.length + content.length];
+        System.arraycopy(headerBytes, 0, combined, 0, headerBytes.length);
+        System.arraycopy(content, 0, combined, headerBytes.length, content.length);
+
+        // SHA-1 해시 계산
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-1");
+            byte[] hash = digest.digest(combined);
+            return bytesToHex(hash);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-1 알고리즘을 찾을 수 없습니다.", e);
+        }
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 
     private static void initGitRepository() {
