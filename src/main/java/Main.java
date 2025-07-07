@@ -26,7 +26,46 @@ public class Main {
             case "cat-file" -> catFile(args);
             case "hash-object" -> hashObject(args);
             case "ls-tree" -> lsTree(args);
+            case "write-tree" -> writeTree(args);
             default -> System.out.println("Unknown command: " + command);
+        }
+    }
+
+    private static void writeTree(String[] args) {
+        if (args.length < 3) {
+            System.out.println("write-tree 명령어에는 충분한 인수가 필요합니다.");
+            return;
+        }
+
+        String hash = args[2];
+        final String folderName = hash.substring(0, 2);
+        final String fileName = hash.substring(2);
+
+        File objectFile = new File(".git/objects/" + folderName + "/" + fileName);
+        if (!objectFile.exists()) {
+            System.out.println("객체 파일이 존재하지 않습니다: " + objectFile.getPath());
+            return;
+        }
+
+        try {
+            byte[] compressed = Files.readAllBytes(objectFile.toPath());
+            Inflater inflater = new Inflater();
+            inflater.setInput(compressed);
+
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            while (!inflater.finished()) {
+                int count = inflater.inflate(buffer);
+                outputStream.write(buffer, 0, count);
+            }
+            inflater.end();
+
+            String content = outputStream.toString("UTF-8");
+            System.out.println(content);
+        } catch (IOException e) {
+            throw new RuntimeException("객체 파일 읽기 실패: " + objectFile.getPath(), e);
+        } catch (DataFormatException e) {
+            throw new RuntimeException("압축 해제 실패: " + objectFile.getPath(), e);
         }
     }
 
