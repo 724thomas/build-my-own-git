@@ -1,9 +1,11 @@
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.zip.DataFormatException;
+import java.util.zip.DeflaterOutputStream;
 import java.util.zip.Inflater;
 
 public class Main {
@@ -24,45 +26,60 @@ public class Main {
     }
 
     private static void hashObject(String[] args) {
-        if (args.length < 2) {
-            System.out.println("hash-object 명령어에는 충분한 인수가 필요합니다.");
-            return;
-        }
+        if (args.length < 3 || !args[1].equals("-w")) {
+            System.out.println("hash-object 명령어에는 -w 옵션과 파일 경로가 필요합니다.");
+        } else {
+            try {
+                String fileName = args[2];
+                File file = new File(fileName);
+                if (!file.exists() || !file.isFile()) {
+                    System.out.println("파일이 존재하지 않거나 유효하지 않습니다: " + fileName);
+                    return;
+                }
 
-        final String filePath = args[1];
-        try {
-            byte[] content = Files.readAllBytes(Paths.get(filePath));
-            String objectHash = hashContent(content);
-            System.out.println("객체 해시: " + objectHash);
-        } catch (IOException e) {
-            throw new RuntimeException("파일 읽기 실패: " + filePath, e);
+                byte[] content = Files.readAllBytes(file.toPath());
+                String header = "blob " + content.length + "\0";
+                byte[] fullContent = concatenate(header.getBytes(), content);
+
+                String sha1 = computeSHA1(fullContent);
+
+                String dir = ".git/objects/" + sha1.substring(0, 2);
+                String filePath = dir + "/" + sha1.substring(2);
+                new File(dir).mkdirs();
+
+                try (FileOutputStream fos = new FileOutputStream(filePath)) {
+                    DeflaterOutputStream dos = new DeflaterOutputStream(fos); {
+                        dos.write(fullContent);
+                    }
+                }
+                System.out.println(sha1);
+
+            } catch (IOException e) {
+                throw new RuntimeException("파일 읽기 실패: " + args[2], e);
+            }
         }
     }
 
-    private static String hashContent(byte[] content) {
-        // Git 객체 해시 계산 로직
-        String header = "blob " + content.length + "\0";
-        byte[] headerBytes = header.getBytes();
-        byte[] combined = new byte[headerBytes.length + content.length];
-        System.arraycopy(headerBytes, 0, combined, 0, headerBytes.length);
-        System.arraycopy(content, 0, combined, headerBytes.length, content.length);
+    private static byte[] concatenate(byte[] header, byte[] content) {
+        byte[] fullContent = new byte[header.length + content.length];
+        System.arraycopy(header, 0, fullContent, 0, header.length);
+        System.arraycopy(content, 0, fullContent, header.length, content.length);
+        return fullContent;
+    }
 
-        // SHA-1 해시 계산
+    private static String computeSHA1(byte[] data) {
         try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-1");
-            byte[] hash = digest.digest(combined);
-            return bytesToHex(hash);
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-1");
+            byte[] digest = md.digest(data);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            System.out.println("객체 해시: " + sb.toString());
+            return sb.toString();
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-1 알고리즘을 찾을 수 없습니다.", e);
         }
-    }
-
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
     }
 
     private static void initGitRepository() {
