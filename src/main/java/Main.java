@@ -119,26 +119,49 @@ public class Main {
 
             inflater.setInput(compressed);
 
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             byte[] buffer = new byte[8192];
-            StringBuilder sb = new StringBuilder();
             while (!inflater.finished()) {
                 int count = inflater.inflate(buffer);
-                sb.append(new String(buffer, 0, count));
+                outputStream.write(buffer, 0, count);
             }
-
             inflater.end();
 
-            int firstNullIndex = sb.indexOf("\0");
-            int offset = firstNullIndex + 1;
+            byte[] decompressed = outputStream.toByteArray();
+            
+            // 헤더 스킵 (예: "tree 123\0")
+            int headerEnd = 0;
+            for (int i = 0; i < decompressed.length; i++) {
+                if (decompressed[i] == 0) {
+                    headerEnd = i + 1;
+                    break;
+                }
+            }
+
             List<String> files = new ArrayList<>();
-
-            while (sb.indexOf("\0", offset) != -1) {
-                int nullIndex = sb.indexOf("\0", offset);
-                int spaceIndex = sb.indexOf(" ", offset);
-
-                String name = sb.substring(spaceIndex+1, nullIndex);
-                files.add(name);
-                offset = nullIndex + 1;
+            int offset = headerEnd;
+            
+            while (offset < decompressed.length) {
+                // 모드와 이름 읽기 (null 바이트까지)
+                int nullIndex = -1;
+                for (int i = offset; i < decompressed.length; i++) {
+                    if (decompressed[i] == 0) {
+                        nullIndex = i;
+                        break;
+                    }
+                }
+                
+                if (nullIndex == -1) break;
+                
+                String modeAndName = new String(decompressed, offset, nullIndex - offset, StandardCharsets.UTF_8);
+                int spaceIndex = modeAndName.indexOf(' ');
+                if (spaceIndex != -1) {
+                    String name = modeAndName.substring(spaceIndex + 1);
+                    files.add(name);
+                }
+                
+                // 20바이트 SHA-1 해시 스킵
+                offset = nullIndex + 1 + 20;
             }
 
             for (String file : files) {
