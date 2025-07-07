@@ -4,6 +4,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.zip.DataFormatException;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.Inflater;
@@ -69,14 +71,15 @@ public class Main {
 
     private static String computeSHA1(byte[] data) {
         try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-1");
-            byte[] digest = md.digest(data);
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b));
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            byte[] hash = md.digest(data);
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                hexString.append(String.format("%02x", b));
             }
-            return sb.toString();
-        } catch (java.security.NoSuchAlgorithmException e) {
+            return hexString.toString();
+        }
+        catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-1 알고리즘을 찾을 수 없습니다.", e);
         }
     }
