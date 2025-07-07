@@ -14,6 +14,10 @@ import java.util.Objects;
 import java.util.zip.DataFormatException;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.Inflater;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.InvalidRemoteException;
+import org.eclipse.jgit.api.errors.TransportException;
 
 public class Main {
     public static void main(String[] args) {
@@ -36,8 +40,21 @@ public class Main {
             System.out.println(treeSha);
         } else if (Objects.equals(command, "commit-tree")) {
             commitTree(args);
+        } else if (Objects.equals(command, "clone")) {
+            String repoUrl = args[1];
+            String targetDir = args[2];
+            cloneRepo(repoUrl, targetDir);
         } else {
             System.out.println("알 수 없는 명령어: " + command);
+        }
+    }
+
+    private static void cloneRepo(String repoURL, String targetDir) {
+        try {
+            Git.cloneRepository().setURI(repoURL).setDirectory(new File(targetDir)).call();
+        }
+        catch (GitAPIException e) {
+            throw new RuntimeException(e);
         }
     }
 
