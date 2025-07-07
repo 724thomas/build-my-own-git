@@ -33,10 +33,69 @@ public class Main {
             lsTree(args);
         } else if (Objects.equals(command, "write-tree")) {
             String treeSha = writeTree(new File("."));
-            System.out.println(treeSha  );
+            System.out.println(treeSha);
+        } else if (Objects.equals(command, "commit-tree")) {
+            commitTree(args);
         } else {
             System.out.println("알 수 없는 명령어: " + command);
         }
+    }
+
+    private static void commitTree(String[] args) {
+
+        String treeSha = args[1];
+        List<String> parentShas = new ArrayList<>();
+        for (int i = 2; i < args.length - 1; i++) {
+            if (args[i].equals("-p")) {
+                parentShas.add(args[i + 1]);
+            }
+        }
+        String commitMessage = args[args.length - 1];
+
+        String authorName = "sabya";
+        String authorEmail = "sabya@sachi.com";
+        String committerName = "Committer Name";
+        String committerEmail = "sabya@abcd.com";
+        long timestamp = System.currentTimeMillis() / 1000;
+
+        String parentCommitShas = String.join(" ", parentShas);
+        String commitContent = String.format("tree %s\n", treeSha);
+        if (!parentCommitShas.isEmpty()) {
+            commitContent += String.format("parent %s\n", parentCommitShas);
+        }
+        commitContent += String.format("author %s <%s> %d +0000\n", authorName, authorEmail, timestamp);
+        commitContent += String.format("committer %s <%s> %d +0000\n", committerName, committerEmail, timestamp);
+        commitContent += "\n" + commitMessage + "\n";
+
+        byte[] commitBytes = commitContent.getBytes(StandardCharsets.UTF_8);
+        byte[] header = ("commit " + commitBytes.length + "\0").getBytes(StandardCharsets.UTF_8);
+        byte[] commitObject = concatArr(header, commitBytes);
+        String commitHash = computeSHA1(commitObject);
+        writeGitObject(commitHash, commitObject);
+
+        System.out.println(commitHash);
+
+    }
+
+    private static void writeGitObject(String commitHash, byte[] commitObject) {
+        String dir = ".git/objects/" + commitHash.substring(0, 2);
+        String filePath = dir + "/" + commitHash.substring(2);
+        new File(dir).mkdirs();
+
+        try (FileOutputStream fos = new FileOutputStream(filePath);
+             DeflaterOutputStream dos = new DeflaterOutputStream(fos)) {
+            dos.write(commitObject);
+            dos.finish();
+        } catch (IOException e) {
+            throw new RuntimeException("Git 객체 파일 쓰기 실패: " + filePath, e);
+        }
+    }
+
+    private static byte[] concatArr(byte[] header, byte[] commitBytes) {
+        byte[] commitObject = new byte[header.length + commitBytes.length];
+        System.arraycopy(header, 0, commitObject, 0, header.length);
+        System.arraycopy(commitBytes, 0, commitObject, header.length, commitBytes.length);
+        return commitObject;
     }
 
     private static String writeTree(File dir) {
